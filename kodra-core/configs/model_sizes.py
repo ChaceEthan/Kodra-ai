@@ -106,7 +106,18 @@ for _spec in MODEL_SIZES.values():
     validate_model_config(_spec.config)
 
 
+def normalize_model_size_name(name: str) -> str:
+    """Accepts either the short form ("tiny", as used by the
+    KODRA_MODEL_SIZE environment variable) or the full form ("kodra-tiny")
+    and returns the full form used as a MODEL_SIZES key."""
+    name = (name or "").strip().lower()
+    if name in MODEL_SIZES:
+        return name
+    prefixed = f"kodra-{name}"
+    if prefixed in MODEL_SIZES:
+        return prefixed
+    raise KeyError(f"Unknown model size '{name}'. Available: {list(MODEL_SIZES.keys())}")
+
+
 def get_model_size(name: str) -> ModelSizeSpec:
-    if name not in MODEL_SIZES:
-        raise KeyError(f"Unknown model size '{name}'. Available: {list(MODEL_SIZES.keys())}")
-    return MODEL_SIZES[name]
+    return MODEL_SIZES[normalize_model_size_name(name)]

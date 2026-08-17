@@ -6,7 +6,7 @@ SYS_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if SYS_DIR not in sys.path:
     sys.path.insert(0, SYS_DIR)
 
-from configs.model_sizes import MODEL_SIZES, validate_model_config, get_model_size
+from configs.model_sizes import MODEL_SIZES, validate_model_config, get_model_size, normalize_model_size_name
 from configs.config import ModelConfig
 from model.gpt_model import KodraGPT
 
@@ -37,6 +37,20 @@ class TestModelSizes(unittest.TestCase):
     def test_larger_sizes_marked_untrained(self):
         for name in ("kodra-small", "kodra-base", "kodra-medium"):
             self.assertFalse(MODEL_SIZES[name].trained)
+
+    def test_normalize_short_form_from_env_var_style(self):
+        # KODRA_MODEL_SIZE=tiny should resolve the same as "kodra-tiny".
+        self.assertEqual(normalize_model_size_name("tiny"), "kodra-tiny")
+        self.assertEqual(normalize_model_size_name("small"), "kodra-small")
+        self.assertEqual(normalize_model_size_name("KODRA-BASE"), "kodra-base")
+
+    def test_normalize_unknown_raises(self):
+        with self.assertRaises(KeyError):
+            normalize_model_size_name("huge")
+
+    def test_get_model_size_accepts_short_form(self):
+        spec = get_model_size("tiny")
+        self.assertEqual(spec.name, "kodra-tiny")
 
 
 if __name__ == "__main__":

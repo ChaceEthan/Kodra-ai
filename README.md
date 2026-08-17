@@ -39,6 +39,42 @@
 └── README.md
 ```
 
+## Technology Stack
+
+| Layer      | Technologies |
+|------------|--------------|
+| Frontend   | TypeScript, React, Vite, CSS (Tailwind) |
+| Gateway    | Node.js, TypeScript, Express |
+| AI Core    | Python, PyTorch |
+| Model API  | FastAPI, Uvicorn |
+| Testing    | pytest (Python core), TypeScript compiler (`tsc --noEmit`), Node's built-in test runner (gateway path-security tests) |
+| Training   | Python/PyTorch, Google Colab-compatible notebook (`kodra-core/notebooks/`) |
+
+Kodra GPT is a from-scratch PyTorch model — it does not call Claude, Gemini,
+or OpenAI, and none of those providers are required to run, train, or
+evaluate Kodra AI Agent. See [Environment Configuration](#environment-configuration)
+below for how those provider keys are treated as strictly optional.
+
+*Kodra AI Agent is not comparable in capability to Claude Code or other
+production coding assistants yet — see [ROADMAP](kodra-core/ROADMAP.md).*
+
+## Environment Configuration
+
+Copy `.env.example` to `.env` and adjust as needed:
+```bash
+cp .env.example .env
+```
+`.env` is gitignored and must never be committed. Every variable has a safe
+local-development default, so the app runs correctly even with no `.env`
+file at all. See the comments in `.env.example` for the full list —
+notably: the gateway/backend host+port, `KODRA_MODEL_SIZE`, `KODRA_DEVICE`,
+`KODRA_ALLOWED_ORIGINS` (CORS), and the agent tool safety flags
+(`KODRA_REQUIRE_TOOL_APPROVAL`, `KODRA_ENABLE_TERMINAL_TOOLS`). The
+`GEMINI_API_KEY` / `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` variables are
+reserved for optional future use (synthetic-data generation, teacher-model
+distillation, benchmarking) and are never read by the Kodra Core runtime
+path today.
+
 ## Quickstart
 
 ### Frontend + backend (recommended)
@@ -57,6 +93,13 @@ python -m scripts.verify_project       # end-to-end health check
 python -m pytest tests/ -q             # full test suite
 python -m training.train --epochs 5    # train Kodra Tiny locally (CPU-scale only)
 python -m evaluation.evaluator --full  # LM + code-completion + syntax evaluation
+```
+
+### Tests
+```bash
+npm run lint          # TypeScript type check
+npm run test:server   # gateway path-security tests (Node's built-in test runner)
+cd kodra-core && python -m pytest tests/ -q   # Python core test suite
 ```
 
 See [kodra-core/README.md](kodra-core/README.md) for full details on the model core.

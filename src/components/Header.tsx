@@ -22,12 +22,13 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab, paramCo
   ];
 
   const defaultIndicators: SystemStatusIndicators = {
-    backend_connected: true,
-    model_initialized: true,
-    dataset_loaded: true,
+    backend_connected: false,
+    model_initialized: false,
+    trained_checkpoint_loaded: false,
+    dataset_loaded: false,
     training_running: false,
-    checkpoint_available: true,
-    inference_ready: true,
+    checkpoint_available: false,
+    inference_available: false,
   };
 
   const currentIndicators = indicators || defaultIndicators;
@@ -35,10 +36,11 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab, paramCo
   const statusItems = [
     { key: "backend_connected", label: "Backend connected", active: currentIndicators.backend_connected },
     { key: "model_initialized", label: "Model initialized", active: currentIndicators.model_initialized },
+    { key: "trained_checkpoint_loaded", label: "Trained checkpoint loaded", active: currentIndicators.trained_checkpoint_loaded },
     { key: "dataset_loaded", label: "Dataset loaded", active: currentIndicators.dataset_loaded },
     { key: "training_running", label: "Training running", active: currentIndicators.training_running },
     { key: "checkpoint_available", label: "Checkpoint available", active: currentIndicators.checkpoint_available },
-    { key: "inference_ready", label: "Inference ready", active: currentIndicators.inference_ready },
+    { key: "inference_available", label: "Inference available", active: currentIndicators.inference_available },
   ];
 
   return (

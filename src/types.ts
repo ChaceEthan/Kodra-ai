@@ -12,10 +12,11 @@ export interface ModelConfigUI {
 export interface SystemStatusIndicators {
   backend_connected: boolean;
   model_initialized: boolean;
+  trained_checkpoint_loaded: boolean;
   dataset_loaded: boolean;
   training_running: boolean;
   checkpoint_available: boolean;
-  inference_ready: boolean;
+  inference_available: boolean;
 }
 
 export interface TokenizeResponse {
