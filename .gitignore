@@ -1,0 +1,66 @@
+node_modules/
+build/
+dist/
+coverage/
+.DS_Store
+*.log
+.env*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.eggs/
+*.egg-info/
+.installed.cfg
+*.egg
+.pytest_cache/
+.coverage
+htmlcov/
+.venv/
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# PyTorch checkpoints & training artifacts
+*.pt
+*.pth
+*.ckpt
+checkpoints/
+runs/
+wandb/
+
+# Datasets (large / processed - never commit)
+kodra-core/data/processed/
+kodra-core/data/raw/
+kodra-core/data/manifest.json
+*.jsonl.gz
+
+# Generated tokenizer artifacts (regenerated at backend startup)
+kodra-core/tokenizer/vocab.json
+kodra-core/tokenizer/vocab_bpe.json
+
+# SSH / credentials - never commit
+*.pem
+id_rsa
+id_ed25519
+id_rsa.pub
+id_ed25519.pub
+credentials.json
+
+# IDE / editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Jupyter
+.ipynb_checkpoints
+
+# Obsolete pre-rebrand directory kept locally for reference only - never committed
+_archive_isaac-code-ai_obsolete/

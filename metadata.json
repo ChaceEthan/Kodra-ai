@@ -1,0 +1,6 @@
+{
+  "name": "Kodra AI Agent",
+  "description": "Your Intelligent Coding Partner. Production-oriented PyTorch Causal GPT Code Model built from scratch with modular tokenizer, dataset loader, attention layers, training pipeline, evaluation, inference, and interactive web suite.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
