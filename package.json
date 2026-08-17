@@ -9,7 +9,7 @@
     "start": "node dist/server.cjs",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
-    "test:server": "node --import tsx/esm --test tests/server-path-security.test.mjs"
+    "test:server": "node --import tsx/esm --test tests/*.test.mjs"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.1.14",

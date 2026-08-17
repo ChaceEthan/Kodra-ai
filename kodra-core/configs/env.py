@@ -69,6 +69,11 @@ class RuntimeConfig:
     log_level: str
     model_size: str
     api_key: str
+    # Configuration boundary only - see kodra-core/agent/README.md /
+    # REPOSITORY VECTOR INDEX status. No embeddings or retrieval are
+    # implemented yet; nothing reads these two fields at runtime.
+    vector_db_provider: str
+    vector_db_path: str
 
 
 def load_runtime_config(kodra_core_dir: Optional[str] = None) -> RuntimeConfig:
@@ -89,4 +94,6 @@ def load_runtime_config(kodra_core_dir: Optional[str] = None) -> RuntimeConfig:
         log_level=os.environ.get("LOG_LEVEL", "INFO"),
         model_size=os.environ.get("KODRA_MODEL_SIZE", "tiny"),
         api_key=os.environ.get("KODRA_API_KEY", ""),
+        vector_db_provider=os.environ.get("VECTOR_DB_PROVIDER", "local"),
+        vector_db_path=os.environ.get("VECTOR_DB_PATH", os.path.join(core_dir, "data", "vector_store")),
     )

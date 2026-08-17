@@ -1,28 +1,53 @@
-import "dotenv/config";
-import express from "express";
 import path from "path";
 import fs from "fs";
+import { fileURLToPath } from "url";
+import dotenv from "dotenv";
+import express from "express";
 import { spawn } from "child_process";
 import { createServer as createViteServer } from "vite";
-import { resolveWithinRoot } from "./server-utils";
+import { resolveWithinRoot, resolvePort, parseAllowedOrigins } from "./server-utils";
+
+// This file lives at the repository root, so resolve paths relative to it
+// rather than process.cwd() - the gateway must start reliably whether it's
+// launched from the repo root (the normal `npm run dev` case) or from some
+// other working directory.
+//
+// The production build (esbuild --format=cjs) empties out `import.meta` at
+// bundle time, so `import.meta.url` is undefined there and fileURLToPath
+// throws - fall back to process.cwd(), which is the repo root for both
+// `npm run dev` (tsx, ESM) and `npm start` (node dist/server.cjs, CJS).
+function resolveRepoRoot(): string {
+  try {
+    return path.dirname(fileURLToPath(import.meta.url));
+  } catch {
+    return process.cwd();
+  }
+}
+const REPO_ROOT = resolveRepoRoot();
+dotenv.config({ path: path.join(REPO_ROOT, ".env") });
 
 // --- Environment-driven configuration (safe local-dev defaults) ------------
 const APP_HOST = process.env.APP_HOST || "0.0.0.0";
-const APP_PORT = parseInt(process.env.APP_PORT || "3000", 10);
+const APP_PORT = resolvePort(process.env.APP_PORT, 3000);
+const APP_URL = process.env.APP_URL || `http://localhost:${APP_PORT}`;
+const LOG_LEVEL = (process.env.LOG_LEVEL || "INFO").toUpperCase();
 
 const KODRA_BACKEND_HOST = process.env.KODRA_BACKEND_HOST || "127.0.0.1";
-const KODRA_BACKEND_PORT = parseInt(process.env.KODRA_BACKEND_PORT || "8000", 10);
+const KODRA_BACKEND_PORT = resolvePort(process.env.KODRA_BACKEND_PORT, 8000);
 const KODRA_BACKEND_URL =
   process.env.KODRA_BACKEND_URL || `http://${KODRA_BACKEND_HOST}:${KODRA_BACKEND_PORT}`;
 
-const KODRA_CORE_DIR = path.resolve(process.cwd(), process.env.KODRA_CORE_DIR || "./kodra-core");
+const KODRA_CORE_DIR = path.resolve(REPO_ROOT, process.env.KODRA_CORE_DIR || "./kodra-core");
 
-const PROXY_TIMEOUT_MS = parseInt(process.env.KODRA_PROXY_TIMEOUT_MS || "15000", 10);
+const PROXY_TIMEOUT_MS = resolvePort(process.env.KODRA_PROXY_TIMEOUT_MS, 15000);
 
-const ALLOWED_ORIGINS = (process.env.KODRA_ALLOWED_ORIGINS || "http://localhost:3000")
-  .split(",")
-  .map((o) => o.trim())
-  .filter(Boolean);
+const ALLOWED_ORIGINS = parseAllowedOrigins(process.env.KODRA_ALLOWED_ORIGINS);
+
+function logDebug(...args: any[]) {
+  if (LOG_LEVEL === "DEBUG") {
+    console.log("[Kodra AI Agent][debug]", ...args);
+  }
+}
 
 async function startServer() {
   const app = express();
@@ -95,6 +120,7 @@ async function startServer() {
   // and correct upstream-status/error propagation.
   async function proxyToPy(req: express.Request, res: express.Response) {
     const url = `${KODRA_BACKEND_URL}${req.originalUrl}`;
+    logDebug(`Proxying ${req.method} ${req.originalUrl} -> ${url}`);
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), PROXY_TIMEOUT_MS);
 
@@ -186,6 +212,7 @@ async function startServer() {
   app.get("/api/train/metrics", proxyToPy);
   app.post("/api/tests/run", proxyToPy);
   app.get("/api/attention", proxyToPy);
+  app.get("/api/agent/status", proxyToPy);
   app.get("/api/backend-health", proxyToPy); // proxies to FastAPI GET /api/health
 
   // Gateway-level health check: real state only, no fabricated fields.
@@ -274,7 +301,8 @@ async function startServer() {
   }
 
   app.listen(APP_PORT, APP_HOST, () => {
-    console.log(`[Kodra AI Agent] Server running on http://localhost:${APP_PORT}`);
+    console.log(`[Kodra AI Agent] Server running on ${APP_URL} (bound to ${APP_HOST}:${APP_PORT})`);
+    logDebug("Config:", { APP_URL, KODRA_BACKEND_URL, KODRA_CORE_DIR, ALLOWED_ORIGINS, LOG_LEVEL });
   });
 }
 

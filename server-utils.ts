@@ -24,3 +24,19 @@ export function resolveWithinRoot(root: string, relativePath: string): string | 
   }
   return full;
 }
+
+/** Parses an integer port from an env var string, falling back to a safe
+ * default when unset or unparsable (never throws, never returns NaN). */
+export function resolvePort(raw: string | undefined, fallback: number): number {
+  if (!raw) return fallback;
+  const parsed = parseInt(raw, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+/** Parses a comma-separated KODRA_ALLOWED_ORIGINS value into a trimmed,
+ * non-empty list of origins, falling back to the local-dev default. */
+export function parseAllowedOrigins(raw: string | undefined, fallback: string[] = ["http://localhost:3000"]): string[] {
+  if (!raw || !raw.trim()) return fallback;
+  const origins = raw.split(",").map((o) => o.trim()).filter(Boolean);
+  return origins.length > 0 ? origins : fallback;
+}

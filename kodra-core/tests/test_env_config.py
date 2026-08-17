@@ -20,7 +20,8 @@ class TestEnvConfig(unittest.TestCase):
             "KODRA_DEVICE", "KODRA_CHECKPOINT_DIR", "KODRA_DATA_DIR",
             "KODRA_ALLOWED_ORIGINS", "KODRA_REQUIRE_TOOL_APPROVAL",
             "KODRA_ENABLE_TERMINAL_TOOLS", "LOG_LEVEL", "KODRA_MODEL_SIZE",
-            "KODRA_API_KEY",
+            "KODRA_API_KEY", "VECTOR_DB_PROVIDER", "VECTOR_DB_PATH",
+            "GEMINI_API_KEY", "ANTHROPIC_API_KEY", "OPENAI_API_KEY",
         ]
         self._snapshot = {k: os.environ.get(k) for k in self._keys}
         for k in self._keys:
@@ -42,6 +43,8 @@ class TestEnvConfig(unittest.TestCase):
         self.assertFalse(cfg.enable_terminal_tools)
         self.assertEqual(cfg.model_size, "tiny")
         self.assertEqual(cfg.api_key, "")
+        self.assertEqual(cfg.vector_db_provider, "local")
+        self.assertTrue(cfg.vector_db_path.endswith(os.path.join("data", "vector_store")))
 
     def test_env_vars_override_defaults(self):
         os.environ["KODRA_DEVICE"] = "cpu"
@@ -87,6 +90,25 @@ class TestEnvConfig(unittest.TestCase):
         # Should not raise regardless of hardware.
         device = get_device("auto")
         self.assertIn(str(device), ("cpu", "cuda", "mps"))
+
+    def test_runs_without_any_external_provider_keys(self):
+        # None of GEMINI_API_KEY / ANTHROPIC_API_KEY / OPENAI_API_KEY are
+        # set, and load_runtime_config must not require, read, or fail
+        # without them - KodraGPT never calls these providers.
+        for key in ("GEMINI_API_KEY", "ANTHROPIC_API_KEY", "OPENAI_API_KEY"):
+            self.assertNotIn(key, os.environ)
+        cfg = load_runtime_config(kodra_core_dir="/tmp/kodra-core")
+        self.assertIsNotNone(cfg)  # loaded successfully with zero provider keys present
+
+    def test_vector_store_is_config_only_no_import_error(self):
+        # The vector store is a configuration boundary only (see
+        # REPOSITORY VECTOR INDEX: NOT YET IMPLEMENTED) - reading its env
+        # vars must never require an actual vector DB package.
+        os.environ["VECTOR_DB_PROVIDER"] = "local"
+        os.environ["VECTOR_DB_PATH"] = "/tmp/kodra-core/data/vector_store"
+        cfg = load_runtime_config(kodra_core_dir="/tmp/kodra-core")
+        self.assertEqual(cfg.vector_db_provider, "local")
+        self.assertEqual(cfg.vector_db_path, "/tmp/kodra-core/data/vector_store")
 
 
 if __name__ == "__main__":

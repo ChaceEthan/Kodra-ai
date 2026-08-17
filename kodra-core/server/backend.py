@@ -142,11 +142,17 @@ class GenerateReq(BaseModel):
 # --- Routes ---
 @app.get("/api/health")
 def health():
-    """Real, unconditional liveness check - no model/tokenizer state
-    required, so it stays useful even if SystemState init fails later."""
+    """Real runtime state - every field reflects actual backend/model state,
+    never a hard-coded success value."""
     return {
         "success": True,
         "status": "ok",
+        "product": "Kodra AI Agent",
+        "backend": True,
+        "model_initialized": state.model_initialized,
+        "trained_checkpoint_loaded": state.trained_checkpoint_loaded,
+        "training_running": state.training_running,
+        "device": str(state.device),
         "uptime_sec": round(time.time() - _SERVER_START_TIME, 1),
     }
 
@@ -185,6 +191,31 @@ def get_status():
             "checkpoint_available": has_ckpt,
             "inference_available": state.model_initialized,
         },
+    }
+
+
+@app.get("/api/agent/status")
+def agent_status():
+    """Real, unembellished status of the Kodra Agent tool foundation. Do not
+    infer from tool_registry non-emptiness that an autonomous agent loop
+    exists - see runtime_loop_status below."""
+    from agent.runtime import KODRA_AGENT_RUNTIME_STATUS
+    from agent.tool_registry import TOOL_REGISTRY
+
+    return {
+        "success": True,
+        "tools_implemented": sorted(TOOL_REGISTRY.keys()),
+        "runtime_loop_status": KODRA_AGENT_RUNTIME_STATUS,
+        "runtime_loop_note": (
+            "Individual tools are implemented and tested, but there is no "
+            "planner turning KodraGPT output into tool calls yet, so there "
+            "is no working autonomous agent loop."
+        ),
+        "require_tool_approval": RUNTIME.require_tool_approval,
+        "enable_terminal_tools": RUNTIME.enable_terminal_tools,
+        "autonomous_mutation_requires_trained_checkpoint": True,
+        "repository_vector_index_status": "NOT_YET_IMPLEMENTED",
+        "vector_db_provider": RUNTIME.vector_db_provider,
     }
 
 

@@ -7,9 +7,10 @@ loop will call into. None of this is wired to a live LLM tool-call loop yet
 head or agent runtime. This module exists so the interface is designed and
 tested ahead of time.
 
-Future planner-loop interface boundary (not implemented, see AgentStep /
-PlannerLoop below): model -> planner -> tool request -> approval -> tool
-execution -> observation -> model continuation.
+Future planner-loop interface boundary (not implemented - see
+agent/runtime.py, agent/planner.py, agent/permissions.py, agent/context.py,
+and agent/tool_registry.py): model -> planner -> tool request -> approval
+-> tool execution -> observation -> model continuation.
 
 Safety model:
   - Read-only tools (read_file, search_files, search_code, list_directory,
@@ -30,9 +31,8 @@ Safety model:
 import fnmatch
 import os
 import re
-import shutil
 import subprocess
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
@@ -328,48 +328,3 @@ def _apply_hunks(original: str, hunks: List["_Hunk"]) -> str:
         offset += len(hunk.new_lines) - len(hunk.old_lines)
     return "\n".join(lines)
 
-
-# --- Future planner-loop interface boundary (documentation + typed shape) --
-# This is intentionally NOT an implementation. It exists so the eventual
-# model -> planner -> tool -> approval -> execution -> observation loop has
-# a stable shape to target, without building the (expensive, model-specific)
-# planning logic itself in this task.
-class AgentStepKind(str, Enum):
-    TOOL_REQUEST = "tool_request"
-    OBSERVATION = "observation"
-    MODEL_CONTINUATION = "model_continuation"
-
-
-@dataclass
-class ToolRequest:
-    """A tool call the planner wants to make, before approval/execution."""
-    tool_name: str
-    arguments: Dict[str, Any] = field(default_factory=dict)
-    rationale: str = ""
-
-
-@dataclass
-class AgentStep:
-    """One step in the future model<->tool loop. `kind` distinguishes a
-    pending tool request from its resulting observation or the model's next
-    continuation, so a transcript of steps fully reconstructs the loop."""
-    kind: AgentStepKind
-    tool_request: Optional[ToolRequest] = None
-    tool_result: Optional[ToolResult] = None
-    model_text: Optional[str] = None
-
-
-class PlannerLoop:
-    """Roadmap placeholder for the future agent loop: model -> planner ->
-    tool request -> approval -> tool execution -> observation -> model
-    continuation. Not implemented - Kodra GPT Phase 1 has no tool-calling
-    head, so there is no model output to parse into ToolRequests yet."""
-
-    def __init__(self, tools: KodraAgentTools):
-        self.tools = tools
-
-    def run_step(self, _model_output: str) -> AgentStep:
-        raise NotImplementedError(
-            "PlannerLoop.run_step is a roadmap placeholder - Kodra GPT does "
-            "not yet emit tool calls for this to parse."
-        )
