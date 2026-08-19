@@ -121,3 +121,20 @@ def normalize_model_size_name(name: str) -> str:
 
 def get_model_size(name: str) -> ModelSizeSpec:
     return MODEL_SIZES[normalize_model_size_name(name)]
+
+
+def estimate_resources(cfg: ModelConfig) -> Dict[str, float]:
+    """Return transparent rough resource estimates for planning only.
+
+    Parameter count is instantiated-model authoritative; this estimate is useful
+    before allocating a large model. AdamW training assumes fp16 weights plus
+    gradients and fp32 optimizer states (about 16 bytes/parameter), while
+    inference assumes fp16 weights (2 bytes/parameter).
+    """
+    params = float(_approx_param_count(cfg))
+    return {
+        "parameters": int(params),
+        "checkpoint_size_gb": params * 4 / (1024 ** 3),
+        "inference_vram_gb": params * 2 / (1024 ** 3),
+        "training_vram_gb": params * 16 / (1024 ** 3),
+    }

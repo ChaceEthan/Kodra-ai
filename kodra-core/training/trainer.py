@@ -1,6 +1,7 @@
 import math
 import os
 import time
+import datetime
 import torch
 import torch.nn as nn
 from dataclasses import asdict
@@ -38,6 +39,8 @@ class Trainer:
         val_loader: Optional[DataLoader] = None,
         device: Optional[torch.device] = None,
         tokenizer_type: str = "char",
+        tokenizer_version: int = 1,
+        dataset_manifest_id: Optional[str] = None,
     ):
         self.model = model
         self.config = config
@@ -45,6 +48,8 @@ class Trainer:
         self.val_loader = val_loader
         self.device = device or torch.device("cpu")
         self.tokenizer_type = tokenizer_type
+        self.tokenizer_version = tokenizer_version
+        self.dataset_manifest_id = dataset_manifest_id
 
         self.model.to(self.device)
 
@@ -150,6 +155,13 @@ class Trainer:
         return {
             "format_version": CHECKPOINT_FORMAT_VERSION,
             "tokenizer_type": self.tokenizer_type,
+            "tokenizer_version": self.tokenizer_version,
+            "vocab_size": self.model.config.vocab_size,
+            "context_length": self.model.config.context_length,
+            "model_name": "KodraGPT",
+            "parameter_count": self.model.count_parameters(),
+            "dataset_manifest_id": self.dataset_manifest_id,
+            "creation_timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
             "model_state_dict": self.model.state_dict(),
             "optimizer_state_dict": self.optimizer.state_dict(),
             "config": asdict(self.model.config),
@@ -178,6 +190,9 @@ class Trainer:
                 f"trainer is configured for '{self.tokenizer_type}'. Refusing to load "
                 f"an incompatible checkpoint."
             )
+        ckpt_vocab = checkpoint.get("vocab_size", checkpoint.get("config", {}).get("vocab_size"))
+        if ckpt_vocab is not None and ckpt_vocab != self.model.config.vocab_size:
+            raise ValueError(f"Checkpoint vocab_size={ckpt_vocab} does not match model vocab_size={self.model.config.vocab_size}")
         self.model.load_state_dict(checkpoint["model_state_dict"])
         if "optimizer_state_dict" in checkpoint:
             self.optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
