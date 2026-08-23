@@ -72,6 +72,20 @@ class TestBPETokenizer(unittest.TestCase):
         self.assertEqual(tok.decode(tok.encode(text)), text)
         self.assertEqual(tok.tokenizer_type, "char")
 
+    def test_multiline_python_roundtrip_preserves_whitespace(self):
+        """Multi-line Python with indentation and blank lines must round-trip
+        byte-for-byte, since whitespace is semantically significant."""
+        tok = ByteLevelBPETokenizer(vocab_size=300)
+        tok.train(self.CORPUS)
+        python_sample = (
+            "def quicksort(arr):\n"
+            "    if len(arr) <= 1:\n"
+            "        return arr\n"
+            "\n"
+            "    pivot = arr[len(arr) // 2]\n"
+        )
+        self.assertEqual(tok.decode(tok.encode(python_sample)), python_sample)
+
 
 if __name__ == "__main__":
     unittest.main()

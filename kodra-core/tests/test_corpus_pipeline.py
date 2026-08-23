@@ -11,6 +11,7 @@ if SYS_DIR not in sys.path:
 from datasets.corpus_pipeline import (
     build_manifest, write_manifest, discover_source_files,
     contains_secret, is_binary,
+    contains_serialized_metadata, contains_replacement_character,
 )
 
 
@@ -75,6 +76,63 @@ class TestCorpusPipeline(unittest.TestCase):
     def test_secret_detection(self):
         self.assertTrue(contains_secret('AWS_KEY = "AKIAABCDEFGHIJKLMNOP"'))
         self.assertFalse(contains_secret("def add(a, b): return a + b"))
+
+    def test_detects_serialized_metadata(self):
+        self.assertTrue(contains_serialized_metadata('{"prompt": "hi", "target": "there"}'))
+        self.assertTrue(contains_serialized_metadata("{'category': 'debugging'}"))
+
+    def test_does_not_flag_legitimate_target_variable(self):
+        # `target` used as an ordinary Python variable followed by a block
+        # colon must never be treated as leaked metadata - this is the exact
+        # code shape that produced a false-positive "contamination" alert.
+        code = (
+            "def binary_search(arr, target):\n"
+            "    low, high = 0, len(arr) - 1\n"
+            "    while low <= high:\n"
+            "        mid = (low + high) // 2\n"
+            "        if arr[mid] == target:\n"
+            "            return mid\n"
+            "        elif arr[mid] < target:\n"
+            "            low = mid + 1\n"
+        )
+        self.assertFalse(contains_serialized_metadata(code))
+
+    def test_detects_replacement_character(self):
+        self.assertTrue(contains_replacement_character("def f():\n    return �\n"))
+        self.assertFalse(contains_replacement_character("def f():\n    return 1\n"))
+
+    def test_manifest_rejects_serialized_metadata_record(self):
+        with open(os.path.join(self.tmp_dir, "src", "leaked.py"), "w", encoding="utf-8") as f:
+            f.write('TRAIN_EXAMPLE = \'{"prompt": "write a function", "target": "def f(): pass", "category": "code_generation"}\'\n')
+        manifest = build_manifest(self.tmp_dir, seed=42)
+        rels = [f["relative_path"] for f in manifest.files]
+        self.assertNotIn("src/leaked.py", rels)
+
+    def test_manifest_keeps_legitimate_code_with_target_variable(self):
+        with open(os.path.join(self.tmp_dir, "src", "search.py"), "w", encoding="utf-8") as f:
+            f.write(
+                "def binary_search(arr, target):\n"
+                "    low, high = 0, len(arr) - 1\n"
+                "    while low <= high:\n"
+                "        mid = (low + high) // 2\n"
+                "        if arr[mid] == target:\n"
+                "            return mid\n"
+                "        elif arr[mid] < target:\n"
+                "            low = mid + 1\n"
+                "        else:\n"
+                "            high = mid - 1\n"
+                "    return -1\n"
+            )
+        manifest = build_manifest(self.tmp_dir, seed=42)
+        rels = [f["relative_path"] for f in manifest.files]
+        self.assertIn("src/search.py", rels)
+
+    def test_manifest_rejects_replacement_character(self):
+        with open(os.path.join(self.tmp_dir, "src", "corrupt.py"), "w", encoding="utf-8") as f:
+            f.write("def f():\n    return �\n    # padding to clear min length filter\n")
+        manifest = build_manifest(self.tmp_dir, seed=42)
+        rels = [f["relative_path"] for f in manifest.files]
+        self.assertNotIn("src/corrupt.py", rels)
 
 
 if __name__ == "__main__":

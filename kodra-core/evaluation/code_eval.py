@@ -95,6 +95,11 @@ def run_code_completion_eval(generator: CodeGenerator, max_new_tokens: int = 48)
 
 # --- Syntax evaluation ----------------------------------------------------
 def python_parses(code: str) -> bool:
+    """`code` is exactly the string returned by `CodeGenerator.generate()` -
+    prompt + continuation, per that method's documented contract - passed to
+    `ast.parse()` unmodified. No stripping, truncation, or prompt removal
+    happens here or in `run_syntax_eval` below, so this score always
+    reflects the real, complete generated text, not a cleaned-up version of it."""
     try:
         ast.parse(code)
         return True

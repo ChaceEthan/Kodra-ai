@@ -84,9 +84,50 @@ def filter_not_mostly_binary_garbage(text: str) -> bool:
     return len(text) == 0 or (printable / len(text)) > 0.85
 
 
+# --- Metadata-contamination filtering --------------------------------------
+# A record is "contaminated" when dataset/record bookkeeping (a field like
+# `prompt`, `completion`, `target`, `category`, or `metadata` from an
+# instruction-tuning or manifest record) gets accidentally serialized into
+# what is supposed to be plain training text - e.g. a bug that writes
+# `str(example_dict)` or a JSON blob into a .py file that then gets read
+# back in as source code. The key is required to be quoted (`"target":` /
+# `'target':`) because that is what JSON/dict serialization always produces.
+# This intentionally does NOT flag a bare `target:` with no quotes, since
+# that is ordinary, valid Python (e.g. a variable named `target` followed by
+# the colon of an `if`/`elif` block, as in binary search) and must never be
+# rejected as if it were leaked metadata.
+_METADATA_KEY_PATTERN = re.compile(
+    r"""["'](prompt|completion|target|category|metadata)["']\s*:"""
+)
+
+
+def contains_serialized_metadata(text: str) -> bool:
+    """True if `text` contains a quoted dataset-record key (e.g. `"target":`)
+    indicating accidental metadata serialization rather than legitimate code
+    or prose."""
+    return bool(_METADATA_KEY_PATTERN.search(text))
+
+
+def contains_replacement_character(text: str) -> bool:
+    """True if `text` contains the Unicode replacement character (U+FFFD),
+    which signals upstream encoding corruption and must never enter the
+    training corpus."""
+    return "�" in text
+
+
+def filter_no_serialized_metadata(text: str) -> bool:
+    return not contains_serialized_metadata(text)
+
+
+def filter_no_replacement_character(text: str) -> bool:
+    return not contains_replacement_character(text)
+
+
 DEFAULT_QUALITY_FILTERS: List[Callable[[str], bool]] = [
     filter_too_short,
     filter_not_mostly_binary_garbage,
+    filter_no_serialized_metadata,
+    filter_no_replacement_character,
 ]
 
 

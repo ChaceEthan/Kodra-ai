@@ -22,6 +22,15 @@ class CodeGenerator:
         temperature: float = 0.7,
         top_k: int = 40,
     ) -> str:
+        """Autoregressively extends `prompt` and returns prompt + generated
+        continuation as one decoded string (never the continuation alone).
+        This is a fixed, documented contract: `generate(p, ...)` always
+        starts with `p` (after a tokenizer encode/decode round-trip), so
+        callers - including the evaluator - see exactly what the model
+        produced with no hidden post-processing or prompt-stripping. A
+        caller that wants only the new text must slice it off explicitly,
+        e.g. `generate(p)[len(p):]`, rather than relying on this method to
+        do it implicitly."""
         self.model.eval()
         tokens = self.tokenizer.encode(prompt)
         idx = torch.tensor([tokens], dtype=torch.long, device=self.device)
