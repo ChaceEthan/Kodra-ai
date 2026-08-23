@@ -44,6 +44,9 @@ kodra-core/data/manifest.json
 # Generated tokenizer artifacts (regenerated at backend startup)
 kodra-core/tokenizer/vocab.json
 kodra-core/tokenizer/vocab_bpe.json
+kodra-core/tokenizer/vocab_bpe_fresh.json
+kodra-core/tokenizer/vocab_fresh.json
+kodra-core/checkpoints/fresh_training/
 
 # SSH / credentials - never commit
 *.pem
