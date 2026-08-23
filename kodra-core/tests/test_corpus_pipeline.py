@@ -12,6 +12,7 @@ from datasets.corpus_pipeline import (
     build_manifest, write_manifest, discover_source_files,
     contains_secret, is_binary,
     contains_serialized_metadata, contains_replacement_character,
+    looks_minified_or_generated, build_training_text,
 )
 
 
@@ -133,6 +134,41 @@ class TestCorpusPipeline(unittest.TestCase):
         manifest = build_manifest(self.tmp_dir, seed=42)
         rels = [f["relative_path"] for f in manifest.files]
         self.assertNotIn("src/corrupt.py", rels)
+
+    def test_detects_minified_and_generated_files(self):
+        minified = "var a=1;function f(x){return x*2}" * 60  # one long, dense line
+        self.assertTrue(looks_minified_or_generated(minified))
+        generated = "// AUTO-GENERATED FILE. DO NOT EDIT.\nfunction f() { return 1; }\n"
+        self.assertTrue(looks_minified_or_generated(generated))
+        normal = "def add(a, b):\n    return a + b\n\ndef sub(a, b):\n    return a - b\n"
+        self.assertFalse(looks_minified_or_generated(normal))
+
+    def test_manifest_rejects_generated_banner_file(self):
+        with open(os.path.join(self.tmp_dir, "src", "generated.js"), "w", encoding="utf-8") as f:
+            f.write("// AUTO-GENERATED FILE. DO NOT EDIT.\nfunction f() { return 1 + 1; }\n")
+        manifest = build_manifest(self.tmp_dir, seed=42)
+        rels = [f["relative_path"] for f in manifest.files]
+        self.assertNotIn("src/generated.js", rels)
+        self.assertIn("filter_not_minified_or_generated", manifest.filtered_reasons)
+
+    def test_manifest_reports_filtered_reasons_breakdown(self):
+        with open(os.path.join(self.tmp_dir, "src", "leaked.py"), "w", encoding="utf-8") as f:
+            f.write('X = \'{"prompt": "p", "target": "t"}\'\n')
+        manifest = build_manifest(self.tmp_dir, seed=42)
+        self.assertEqual(
+            manifest.num_filtered_out,
+            sum(manifest.filtered_reasons.values()),
+        )
+        self.assertIn("filter_no_serialized_metadata", manifest.filtered_reasons)
+
+    def test_build_training_text_excludes_manifest_metadata(self):
+        manifest = build_manifest(self.tmp_dir, seed=42, license="MIT", source="unit-test-corpus")
+        train_text = build_training_text(manifest, split="train")
+        # The concatenated training text must be pure file content - no
+        # manifest bookkeeping (license, source label, sha256, ...) leaking in.
+        self.assertNotIn("MIT", train_text)
+        self.assertNotIn("unit-test-corpus", train_text)
+        self.assertIn("def add(a, b):", train_text)
 
 
 if __name__ == "__main__":
