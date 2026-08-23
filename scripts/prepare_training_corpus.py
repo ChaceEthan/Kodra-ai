@@ -76,6 +76,7 @@ def main() -> int:
     print(f" Duplicates removed:     {manifest.num_duplicates_removed}")
     print(f" Secrets redacted:       {manifest.num_secrets_redacted}")
     print(f" Encoding rejected:      {manifest.num_encoding_rejected}")
+    print(f" Lockfiles rejected:     {manifest.num_lockfiles_rejected}")
     print(f" Quality-rejected:       {manifest.num_filtered_out}  {manifest.filtered_reasons}")
     print("=" * 60)
 

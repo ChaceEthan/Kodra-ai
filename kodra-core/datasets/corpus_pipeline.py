@@ -164,6 +164,27 @@ DEFAULT_QUALITY_FILTERS: List[Callable[[str], bool]] = [
 ]
 
 
+# --- Generated dependency-lockfile exclusion --------------------------------
+# Package-manager lockfiles are 100% machine-generated, extremely repetitive,
+# and not representative of how a human writes code - unlike other JSON/YAML
+# config files (package.json, jsconfig.json, tsconfig.json, vercel.json, ...),
+# which remain fully eligible for training. This is deliberately a narrow,
+# exact-basename match (case-insensitive) rather than a content heuristic, so
+# it can never accidentally catch a legitimate, hand-authored config file
+# that merely happens to be JSON/YAML or to mention "lock" somewhere in it.
+GENERATED_LOCKFILE_BASENAMES = frozenset({
+    "package-lock.json", "npm-shrinkwrap.json", "yarn.lock",
+    "pnpm-lock.yaml", "composer.lock", "cargo.lock", "gemfile.lock",
+    "poetry.lock", "pipfile.lock",
+})
+
+
+def is_generated_lockfile(path: str) -> bool:
+    """True if `path`'s basename is an exact, well-known package-manager
+    lockfile name. Never a substring or extension-based match."""
+    return os.path.basename(path).lower() in GENERATED_LOCKFILE_BASENAMES
+
+
 # --- File records -----------------------------------------------------
 @dataclass
 class SourceFileRecord:
@@ -190,6 +211,7 @@ class DatasetManifest:
     num_filtered_out: int
     num_secrets_redacted: int
     num_encoding_rejected: int
+    num_lockfiles_rejected: int
     total_chars: int
     total_token_estimate: int
     language_counts: Dict[str, int]
@@ -268,12 +290,16 @@ def build_manifest(
     num_filtered = 0
     num_secrets = 0
     num_encoding_rejected = 0
+    num_lockfiles_rejected = 0
     filtered_reasons: Dict[str, int] = {}
     language_counts: Dict[str, int] = {}
     split_counts: Dict[str, int] = {"train": 0, "val": 0, "test": 0}
     total_chars = 0
 
     for path in discover_source_files(root, max_file_size_bytes):
+        if is_generated_lockfile(path):
+            num_lockfiles_rejected += 1
+            continue
         try:
             with open(path, "r", encoding="utf-8") as f:
                 text = f.read()
@@ -330,6 +356,7 @@ def build_manifest(
         num_filtered_out=num_filtered,
         num_secrets_redacted=num_secrets,
         num_encoding_rejected=num_encoding_rejected,
+        num_lockfiles_rejected=num_lockfiles_rejected,
         total_chars=total_chars,
         total_token_estimate=total_chars,
         language_counts=language_counts,

@@ -13,6 +13,7 @@ from datasets.corpus_pipeline import (
     contains_secret, is_binary,
     contains_serialized_metadata, contains_replacement_character,
     looks_minified_or_generated, build_training_text,
+    is_generated_lockfile,
 )
 
 
@@ -169,6 +170,74 @@ class TestCorpusPipeline(unittest.TestCase):
         self.assertNotIn("MIT", train_text)
         self.assertNotIn("unit-test-corpus", train_text)
         self.assertIn("def add(a, b):", train_text)
+
+    # --- Generated lockfile exclusion ---------------------------------------
+    def test_is_generated_lockfile_matches_known_basenames(self):
+        self.assertTrue(is_generated_lockfile("/some/project/package-lock.json"))
+        self.assertTrue(is_generated_lockfile("project\\yarn.lock"))
+        self.assertTrue(is_generated_lockfile("pnpm-lock.yaml"))
+        self.assertTrue(is_generated_lockfile("PACKAGE-LOCK.JSON"))  # case-insensitive
+
+    def test_is_generated_lockfile_does_not_match_normal_config(self):
+        # Only an exact basename match counts - a config file that merely
+        # contains "lock" in its name or content must never be caught.
+        self.assertFalse(is_generated_lockfile("package.json"))
+        self.assertFalse(is_generated_lockfile("jsconfig.json"))
+        self.assertFalse(is_generated_lockfile("tsconfig.json"))
+        self.assertFalse(is_generated_lockfile("lockScreenConfig.json"))
+        self.assertFalse(is_generated_lockfile("app-lock-settings.json"))
+
+    def test_manifest_rejects_package_lock_json(self):
+        with open(os.path.join(self.tmp_dir, "src", "package-lock.json"), "w", encoding="utf-8") as f:
+            f.write('{\n  "name": "demo",\n  "lockfileVersion": 3,\n  "packages": {}\n}\n' * 5)
+        manifest = build_manifest(self.tmp_dir, seed=42)
+        rels = [f["relative_path"] for f in manifest.files]
+        self.assertNotIn("src/package-lock.json", rels)
+        self.assertEqual(manifest.num_lockfiles_rejected, 1)
+
+    def test_manifest_accepts_normal_package_json(self):
+        with open(os.path.join(self.tmp_dir, "src", "package.json"), "w", encoding="utf-8") as f:
+            f.write('{\n  "name": "demo",\n  "version": "1.0.0",\n  "scripts": {"start": "node index.js"}\n}\n')
+        manifest = build_manifest(self.tmp_dir, seed=42)
+        rels = [f["relative_path"] for f in manifest.files]
+        self.assertIn("src/package.json", rels)
+        self.assertEqual(manifest.num_lockfiles_rejected, 0)
+
+    def test_manifest_accepts_useful_json_config_files(self):
+        # tsconfig.json is a good example of a hand-authored, useful JSON
+        # config file that must remain fully eligible for training.
+        with open(os.path.join(self.tmp_dir, "src", "tsconfig.json"), "w", encoding="utf-8") as f:
+            f.write('{\n  "compilerOptions": {\n    "target": "es2020",\n    "module": "esnext"\n  }\n}\n')
+        manifest = build_manifest(self.tmp_dir, seed=42)
+        rels = [f["relative_path"] for f in manifest.files]
+        self.assertNotIn("src/tsconfig.json", rels)  # rejected, but by the metadata filter...
+        self.assertIn("filter_no_serialized_metadata", manifest.filtered_reasons)
+        self.assertEqual(manifest.num_lockfiles_rejected, 0)  # ...never by the lockfile filter
+
+    def test_jsconfig_json_target_key_is_a_documented_metadata_filter_false_positive(self):
+        # jsconfig.json's "target": "..." is a TypeScript/JS compiler option
+        # (ECMAScript target version), not dataset-record metadata. The
+        # metadata filter is deliberately conservative about ANY quoted
+        # "target"/"prompt"/"completion"/"category"/"metadata" key, so this
+        # file is rejected as a known, acceptable trade-off - documented and
+        # tested here rather than left as an unexplained surprise. It is
+        # never touched by the lockfile filter, which is basename-only.
+        with open(os.path.join(self.tmp_dir, "src", "jsconfig.json"), "w", encoding="utf-8") as f:
+            f.write('{\n  "compilerOptions": {\n    "target": "ES2020"\n  }\n}\n')
+        manifest = build_manifest(self.tmp_dir, seed=42)
+        rels = [f["relative_path"] for f in manifest.files]
+        self.assertNotIn("src/jsconfig.json", rels)
+        self.assertIn("filter_no_serialized_metadata", manifest.filtered_reasons)
+        self.assertEqual(manifest.num_lockfiles_rejected, 0)
+
+    def test_generated_lockfiles_never_enter_lm_training_text(self):
+        with open(os.path.join(self.tmp_dir, "src", "package-lock.json"), "w", encoding="utf-8") as f:
+            f.write('{\n  "name": "unique-lockfile-marker-xyz",\n  "lockfileVersion": 3\n}\n' * 5)
+        manifest = build_manifest(self.tmp_dir, seed=42, val_ratio=0.0, test_ratio=0.0)
+        train_text = build_training_text(manifest, split="train")
+        val_text = build_training_text(manifest, split="val")
+        self.assertNotIn("unique-lockfile-marker-xyz", train_text)
+        self.assertNotIn("unique-lockfile-marker-xyz", val_text)
 
 
 if __name__ == "__main__":
