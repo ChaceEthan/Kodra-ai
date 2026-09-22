@@ -3,6 +3,7 @@
 Usage: python scripts/training_readiness.py [--data PATH] [--tokenizer PATH]
 """
 import argparse
+import json
 import os
 import sys
 
@@ -11,7 +12,10 @@ CORE = os.path.join(ROOT, "kodra-core")
 sys.path.insert(0, CORE)
 
 from configs.model_sizes import get_model_size, estimate_resources
+from datasets.corpus_pipeline import DatasetManifest, build_training_text
 from model.gpt_model import KodraGPT
+from tokenizer.char_tokenizer import CharTokenizer
+from training.readiness import check_serious_training_gate
 import torch
 
 
@@ -23,12 +27,46 @@ def main() -> int:
     p.add_argument("--model-size", default="tiny")
     args = p.parse_args()
 
-    spec = get_model_size(args.model_size)
-    model = KodraGPT(spec.config)
-    params = model.count_parameters()
     manifest = os.path.join(args.data, "manifest.json")
     dataset_ready = os.path.isfile(manifest)
     tokenizer_ready = bool(args.tokenizer and os.path.isfile(args.tokenizer))
+    blockers = []
+    train_text = ""
+    val_text = ""
+    token_estimate = 0
+    if dataset_ready:
+        try:
+            with open(manifest, "r", encoding="utf-8") as f:
+                dataset_manifest = DatasetManifest(**json.load(f))
+            train_text = build_training_text(dataset_manifest, split="train")
+            val_text = build_training_text(dataset_manifest, split="val")
+        except (OSError, KeyError, TypeError, ValueError) as exc:
+            blockers.append(f"dataset manifest could not be assembled: {exc}")
+    else:
+        blockers.append("dataset manifest missing")
+
+    tokenizer = None
+    if tokenizer_ready:
+        try:
+            tokenizer = CharTokenizer()
+            tokenizer.load(args.tokenizer)
+            token_estimate = len(tokenizer.encode(train_text))
+        except (OSError, KeyError, TypeError, ValueError) as exc:
+            blockers.append(f"tokenizer could not be loaded: {exc}")
+    else:
+        blockers.append("compatible trained tokenizer missing")
+
+    if tokenizer is not None and train_text and val_text:
+        gate = check_serious_training_gate(
+            train_text, val_text, token_estimate=token_estimate, tokenizer=tokenizer,
+        )
+        blockers.extend(gate.blockers)
+
+    spec = get_model_size(args.model_size)
+    if tokenizer is not None:
+        spec.config.vocab_size = tokenizer.vocab_size
+    model = KodraGPT(spec.config)
+    params = model.count_parameters()
     resume = os.path.isfile(os.path.join(args.checkpoint_dir, "kodra_gpt_latest.pt"))
     gpu = torch.cuda.is_available()
     print("KodraGPT TRAINING READINESS")
@@ -42,9 +80,7 @@ def main() -> int:
     r = estimate_resources(spec.config)
     print(f"estimated_training_vram_gb={r['training_vram_gb']:.2f} estimated_inference_vram_gb={r['inference_vram_gb']:.2f}")
     print(f"checkpoint_directory={args.checkpoint_dir} resume_checkpoint_available={resume}")
-    blockers = []
-    if not dataset_ready: blockers.append("dataset manifest missing")
-    if not tokenizer_ready: blockers.append("compatible trained tokenizer missing")
+    print(f"assembled_train_tokens={token_estimate}")
     print("TRAINING READY" if not blockers else "BLOCKERS: " + "; ".join(blockers))
     return 0 if not blockers else 1
 

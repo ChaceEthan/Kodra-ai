@@ -75,6 +75,16 @@ class TestCorpusPipeline(unittest.TestCase):
         write_manifest(manifest, out_path)
         self.assertTrue(os.path.exists(out_path))
 
+    def test_write_manifest_supports_bare_filename(self):
+        manifest = build_manifest(self.tmp_dir, seed=1)
+        old_cwd = os.getcwd()
+        try:
+            os.chdir(self.tmp_dir)
+            write_manifest(manifest, "manifest.json")
+        finally:
+            os.chdir(old_cwd)
+        self.assertTrue(os.path.exists(os.path.join(self.tmp_dir, "manifest.json")))
+
     def test_secret_detection(self):
         self.assertTrue(contains_secret('AWS_KEY = "AKIAABCDEFGHIJKLMNOP"'))
         self.assertFalse(contains_secret("def add(a, b): return a + b"))
@@ -170,6 +180,14 @@ class TestCorpusPipeline(unittest.TestCase):
         self.assertNotIn("MIT", train_text)
         self.assertNotIn("unit-test-corpus", train_text)
         self.assertIn("def add(a, b):", train_text)
+
+    def test_build_training_text_rejects_changed_source(self):
+        manifest = build_manifest(self.tmp_dir, seed=42, val_ratio=0.0, test_ratio=0.0)
+        source_path = os.path.join(self.tmp_dir, "src", "a.py")
+        with open(source_path, "a", encoding="utf-8") as f:
+            f.write("\n# changed after manifest creation\n")
+        with self.assertRaisesRegex(ValueError, "Manifest source changed"):
+            build_training_text(manifest, split="train")
 
     # --- Generated lockfile exclusion ---------------------------------------
     def test_is_generated_lockfile_matches_known_basenames(self):

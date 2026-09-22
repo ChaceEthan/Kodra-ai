@@ -367,7 +367,7 @@ def build_manifest(
 
 
 def write_manifest(manifest: DatasetManifest, output_path: str) -> None:
-    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
     with open(output_path, "w", encoding="utf-8") as f:
         json.dump(asdict(manifest), f, indent=2)
 
@@ -375,7 +375,8 @@ def write_manifest(manifest: DatasetManifest, output_path: str) -> None:
 def build_training_text(manifest: DatasetManifest, split: str = "train") -> str:
     """Concatenates the raw file contents (never manifest bookkeeping fields
     like license/source/sha256) for one split into a single training string,
-    reading each file fresh from disk by its recorded relative_path. This is
+    reading each file fresh from disk by its recorded relative_path and
+    verifying its recorded size and SHA-256. This is
     the only sanctioned way to turn a manifest into LM training text, so
     manifest metadata can never accidentally leak into what the model
     actually trains on."""
@@ -385,7 +386,17 @@ def build_training_text(manifest: DatasetManifest, split: str = "train") -> str:
             continue
         full_path = os.path.join(manifest.root, record["relative_path"])
         with open(full_path, "r", encoding="utf-8") as f:
-            parts.append(f.read())
+            text = f.read()
+        encoded = text.encode("utf-8")
+        actual_size = len(encoded)
+        actual_sha256 = hashlib.sha256(encoded).hexdigest()
+        if actual_size != record["size_bytes"] or actual_sha256 != record["sha256"]:
+            raise ValueError(
+                f"Manifest source changed: {record['relative_path']} "
+                f"(expected {record['sha256']}, {record['size_bytes']} bytes; "
+                f"found {actual_sha256}, {actual_size} bytes)"
+            )
+        parts.append(text)
     return "\n\n".join(parts)
 
 
